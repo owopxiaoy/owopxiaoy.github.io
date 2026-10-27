@@ -1,0 +1,77 @@
+---
+// 雨滴数量：数字越大，雨越密。
+const drops = Array.from({ length: 48 }, (_, i) => ({
+	left: (i * 37.7) % 100,
+	delay: -((i * 0.37) % 2),
+	duration: 0.85 + ((i * 13) % 10) / 10,
+	height: 14 + ((i * 7) % 20),
+}));
+---
+
+<div class="rain-effect">
+  <input id="blog-rain-switch" class="rain-switch" type="checkbox" checked aria-label="显示下雨特效" />
+  <label class="rain-toggle" for="blog-rain-switch">☂ 下雨</label>
+  <div class="rain-layer" aria-hidden="true">
+    {drops.map((drop) => (
+      <span style={`--left:${drop.left}%;--delay:${drop.delay}s;--duration:${drop.duration}s;--length:${drop.height}px`}></span>
+    ))}
+  </div>
+</div>
+
+<style>
+  .rain-layer {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 40;
+  }
+  .rain-layer span {
+    position: absolute;
+    top: -40px;
+    left: var(--left);
+    width: 1px;
+    height: var(--length);
+    background: linear-gradient(transparent, rgba(30, 130, 255, 0.8));
+    animation: rainfall var(--duration) var(--delay) linear infinite;
+  }
+  :global(.dark) .rain-layer span {
+    background: linear-gradient(transparent, rgba(70, 165, 255, 0.75));
+  }
+  @keyframes rainfall {
+    from { transform: translate3d(0, -40px, 0) rotate(12deg); }
+    to { transform: translate3d(-18vh, calc(100vh + 80px), 0) rotate(12deg); }
+  }
+  .rain-switch {
+    position: fixed;
+    right: 28px;
+    bottom: 100px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+  }
+  .rain-toggle {
+    position: fixed;
+    right: 20px;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    z-index: 41;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--card-bg, #fff);
+    color: var(--primary, #718ba4);
+    box-shadow: 0 2px 12px #0002;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .rain-switch:focus-visible + .rain-toggle { outline: 2px solid currentColor; outline-offset: 4px; }
+  .rain-switch:not(:checked) ~ .rain-layer { display: none; }
+  .rain-switch:not(:checked) + .rain-toggle { filter: grayscale(1); opacity: 0.65; }
+  @media (max-width: 768px) {
+    .rain-layer span:nth-child(n + 25) { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rain-effect { display: none; }
+    .rain-layer span { animation: none; }
+  }
+</style>
