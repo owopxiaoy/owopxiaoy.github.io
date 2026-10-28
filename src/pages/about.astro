@@ -1,25 +1,114 @@
 ---
-
-import { getEntry, render } from "astro:content";
-import Markdown from "@components/misc/Markdown.astro";
-import I18nKey from "../i18n/i18nKey";
-import { i18n } from "../i18n/translation";
+import { Image } from "astro:assets";
+import type { ImageMetadata } from "astro";
 import MainGridLayout from "../layouts/MainGridLayout.astro";
 
-const aboutPost = await getEntry("spec", "about");
-
-if (!aboutPost) {
-	throw new Error("About page content not found");
-}
-
-const { Content } = await render(aboutPost);
+// 新照片放入 src/assets/life/，按文件名排序；数字前缀控制顺序，其余名称用作说明。
+const files = import.meta.glob<{ default: ImageMetadata }>(
+	"../assets/life/*.{jpg,jpeg,png,webp,JPG,JPEG,PNG,WEBP}",
+	{ eager: true },
+);
+const photos = Object.entries(files)
+	.sort(([a], [b]) => a.localeCompare(b, "zh-CN", { numeric: true }))
+	.map(([path, file]) => ({
+		image: file.default,
+		caption: path
+			.split("/")
+			.pop()!
+			.replace(/\.[^.]+$/, "")
+			.replace(/^\d+[-_]/, ""),
+	}));
+const projects = [
+	{
+		title: "个人博客",
+		status: "持续更新",
+		text: "给学习和生活留一个位置，慢慢完善页面，也慢慢积累内容。",
+	},
+	{
+		title: "四足机器人",
+		status: "项目记录",
+		text: "整理结构设计、样机调试与实践中的收获，把过程记录下来。",
+	},
+];
+const repositoryUrl = "https://github.com/owopxiaoy?tab=repositories";
 ---
-<MainGridLayout title={i18n(I18nKey.about)} description={i18n(I18nKey.about)}>
-    <div class="flex w-full rounded-[var(--radius-large)] overflow-hidden relative min-h-32">
-        <div class="card-base z-10 px-9 py-6 relative w-full ">
-            <Markdown class="mt-2">
-                <Content />
-            </Markdown>
+<MainGridLayout title="关于" description="最近看见的风景，和正在慢慢完成的事情。">
+  <article class="card-base about-page text-75" data-pagefind-body>
+    <header>
+      <p class="eyebrow">一点生活，一点探索</p>
+      <h1>关于</h1>
+      <p class="intro">最近看见的风景，和正在慢慢完成的事情。</p>
+    </header>
+    <section aria-labelledby="life-title">
+      <div class="section-heading"><h2 id="life-title">生活切片</h2><span>把喜欢的瞬间留下来</span></div>
+      {photos.length > 0 ? <life-gallery>
+        <div class="photo-stage">
+          {photos.map((photo, index) => <button type="button" class="photo-slide" hidden={index !== 0} aria-label={`${photo.caption}，点击查看下一张`}>
+            <Image src={photo.image} alt={photo.caption} widths={[480, 960, 1440]} sizes="(max-width: 768px) 90vw, 800px" format="webp" loading={index === 0 ? "eager" : "lazy"} />
+          </button>)}
         </div>
-    </div>
+        <div class="gallery-toolbar">
+          <div><p class="caption" aria-live="polite">{photos[0].caption}</p><span class="photo-hint">点击照片，翻到下一个瞬间</span></div>
+          <div class="gallery-controls"><button type="button" data-prev aria-label="上一张照片">←</button><span data-counter>1 / {photos.length}</span><button type="button" data-next aria-label="下一张照片">→</button></div>
+        </div>
+        <div class="photo-dots" aria-label="选择照片">{photos.map((photo, index) => <button type="button" data-index={index} data-caption={photo.caption} aria-label={`第 ${index + 1} 张：${photo.caption}`} aria-pressed={index === 0}></button>)}</div>
+      </life-gallery> : <p class="intro">下一段生活，正在路上。</p>}
+    </section>
+    <section aria-labelledby="projects-title">
+      <div class="section-heading"><h2 id="projects-title">最近在做</h2><span>保持好奇，继续动手</span></div>
+      <div class="project-grid">{projects.map((project) => <a class="project-card" href={repositoryUrl} target="_blank" rel="noopener noreferrer">
+        <span class="project-status">{project.status}</span><h3>{project.title}</h3><p>{project.text}</p><span class="project-link">去 GitHub 看看 ↗</span>
+      </a>)}</div>
+    </section>
+  </article>
 </MainGridLayout>
+<script>
+class LifeGallery extends HTMLElement {
+  connectedCallback() {
+    const slides = Array.from(this.querySelectorAll<HTMLButtonElement>(".photo-slide"));
+    const dots = Array.from(this.querySelectorAll<HTMLButtonElement>("[data-index]"));
+    const caption = this.querySelector<HTMLElement>(".caption");
+    const counter = this.querySelector<HTMLElement>("[data-counter]");
+    let current = 0;
+    const show = (index: number) => {
+      current = (index + slides.length) % slides.length;
+      slides.forEach((slide, i) => { slide.hidden = i !== current; });
+      dots.forEach((dot, i) => dot.setAttribute("aria-pressed", String(i === current)));
+      if (caption) caption.textContent = dots[current].dataset.caption || "";
+      if (counter) counter.textContent = `${current + 1} / ${slides.length}`;
+    };
+    slides.forEach((slide) => { slide.onclick = () => { show(current + 1); slides[current].focus({ preventScroll: true }); }; });
+    dots.forEach((dot, i) => { dot.onclick = () => show(i); });
+    const prev = this.querySelector<HTMLButtonElement>("[data-prev]");
+    const next = this.querySelector<HTMLButtonElement>("[data-next]");
+    if (prev) prev.onclick = () => show(current - 1);
+    if (next) next.onclick = () => show(current + 1);
+    this.onkeydown = (event) => {
+      if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        const photoFocused = slides.includes(document.activeElement as HTMLButtonElement);
+        show(current + (event.key === "ArrowRight" ? 1 : -1));
+        if (photoFocused) slides[current].focus({ preventScroll: true });
+      }
+    };
+  }
+}
+if (!customElements.get("life-gallery")) customElements.define("life-gallery", LifeGallery);
+</script>
+<style>
+.about-page{padding:clamp(22px,4vw,40px);color:var(--tw-prose-body,inherit)}
+.eyebrow{color:var(--primary);font-size:13px;letter-spacing:.12em;margin-bottom:10px}
+h1{font-size:32px;font-weight:700;color:var(--tw-prose-headings,inherit)}
+.intro{opacity:.65;line-height:1.8;margin-top:10px}
+section{margin-top:36px}.section-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+h2{font-size:21px;font-weight:700}.section-heading>span{font-size:13px;opacity:.5}
+life-gallery{display:block}.photo-stage{background:rgba(128,128,128,.08);border-radius:16px;overflow:hidden}
+.photo-slide{width:100%;height:clamp(260px,52vw,520px);display:flex;align-items:center;justify-content:center;cursor:pointer}
+.photo-slide[hidden]{display:none}.photo-slide img{width:100%;height:100%;object-fit:contain}
+.gallery-toolbar{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:18px}.caption{font-weight:600}.photo-hint{font-size:12px;opacity:.5}
+.gallery-controls{display:flex;align-items:center;gap:12px;flex-shrink:0}.gallery-controls button{width:36px;height:36px;border-radius:50%;background:var(--btn-regular-bg,rgba(128,128,128,.1));color:var(--primary)}
+[data-counter]{font-size:12px;opacity:.65;font-variant-numeric:tabular-nums}.photo-dots{display:flex;justify-content:center;gap:2px;flex-wrap:wrap;margin-top:12px}.photo-dots button{width:28px;height:28px;display:grid;place-items:center}.photo-dots button::after{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.2}.photo-dots button[aria-pressed="true"]::after{background:var(--primary);opacity:1;width:16px;border-radius:6px}
+button:focus-visible,a:focus-visible{outline:2px solid var(--primary);outline-offset:4px}.project-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.project-card{padding:22px;border:1px solid rgba(128,128,128,.15);border-radius:16px;transition:background .2s}.project-card:hover{background:rgba(128,128,128,.06)}.project-status{font-size:12px;color:var(--primary)}h3{font-size:19px;font-weight:600;margin-top:10px}.project-card p{font-size:14px;line-height:1.8;opacity:.65;margin:10px 0 18px}.project-link{font-size:13px;color:var(--primary)}
+@media(max-width:600px){.project-grid{grid-template-columns:1fr}.photo-hint{font-size:11px}.gallery-controls{gap:8px}h1{font-size:28px}}
+@media(prefers-reduced-motion:reduce){.project-card{transition:none}}
+</style>
